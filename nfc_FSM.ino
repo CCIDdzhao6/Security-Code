@@ -18,7 +18,6 @@ IO Hierarchy
 
 */
 
-
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <Base64.h>
@@ -51,14 +50,14 @@ Adafruit_PN532 nfc(PN532_IRQ, PN532_RESET);
 
 //GLOBAL VARIABLES----------------------------------------------------------
 // Replace with relevent network credentials
-const char* ssid = "fuse33-equipment";
-const char* password = "FuseEquipment";
+const char* ssid = "";
+const char* password = "";
 
 // Replace with your Formidable Form API endpoint
-const char* serverName = "https://fuse33.com/wp-json/frm/v2/entries";
+const char* serverName = "";
 
 // API key
-const char* apiKey = "30HK-EG90-3UEP-7RMM";
+const char* apiKey = "";
 
 // Define the ID array to match
 const uint8_t ID[4] = {0x00, 0x00, 0x00, 0x00};
@@ -69,8 +68,6 @@ IPAddress ip;
 byte mac[6];
 String macString;
 
-//check for a valid card read
-uint8_t success;
 
 //Overide and disable conditions
 int overide_command = 0;
@@ -97,7 +94,7 @@ bool authorized = false;
 /*
 Main code that takes the id of the NFC card being used on the NFC board and saves it in uid
 */
-void scan_card() {
+uint8_t scan_card() {
 
   uint8_t uidLength; // Length of the UID (4 or 7 bytes depending on ISO14443A card type)
 
@@ -123,8 +120,46 @@ void scan_card() {
   {
    Serial.println("failed to read card"); 
   }
+  return success;
+}
+/*
+  opens up communication with the webserver via http
+*/
+void httpSetup(){
+    HTTPClient http;
+    http.begin(serverName); // Specify the URL
+    http.addHeader("Content-Type", "application/json");
+
+    // Create Basic Authentication header
+    String authHeader = "Basic " + base64::encode(String(apiKey) + ":");
+
+    // Add Authorization header
+    http.addHeader("Authorization", authHeader);
+
 }
 
+void deliverPackage(String jsonPayload){
+    // Debug: Print the payload
+        Serial.print("JSON Payload: ");
+        Serial.println(jsonPayload);
+
+        // Send HTTP POST request
+        int httpResponseCode = http.POST(jsonPayload);
+
+        // Check the returning code
+        if (httpResponseCode > 0) {
+            String response = http.getString();
+            Serial.println(httpResponseCode); // Print return code
+            Serial.println(response); // Print request response payload
+        } else {
+            Serial.print("Error on sending POST: ");
+            Serial.println(httpResponseCode);
+        }
+
+        // Free resources
+        http.end();
+        delay(2000);
+}
 /*
 Initialize of the ESP32 board, includes connecting to wifi, finding the ip and mac address of the ESP32
 board, and sends the information to the webserver. Also checks for a NFC board to read NFC cards
@@ -173,7 +208,7 @@ void setup() {
   http.addHeader("Authorization", authHeader);
 
   // Create JSON payload to send ip and mac address to the server
-  String jsonAddresses = "{\"form_id\":\"114\",\"1307\":\"" + ip.toString() +"\",\"1308\":\"" + macString +"\"}";
+  String jsonAddresses = "{\"form_id\":\"1234\",\"1234\":\"" + ip.toString() +"\",\"1234\":\"" + macString +"\"}";
 
   // Debug: Print the payload
   Serial.print("JSON Addresses: ");
@@ -216,30 +251,21 @@ void setup() {
 default state, locks out machine and waits for card or api authorization from server to be recieved
 */
 void lock(){
-    scan_card(); // Buffer to store the returned UID
+    uint8_t success = scan_card(); // Buffer to store the returned UID
     /* 
     Wait for an ISO14443A type cards (Mifare, etc.).  When one is found
     'uid' will be populated with the UID, and UID_LENGTH will indicate
     if the uid is 4 bytes (Mifare Classic) or 7 bytes (Mifare Ultralight)
     */
     if(success){
-      HTTPClient http;
-      http.begin(serverName); // Specify the URL
-      http.addHeader("Content-Type", "application/json");
-
-      // Create Basic Authentication header
-      String authHeader = "Basic " + base64::encode(String(apiKey) + ":");
-
-      // Add Authorization header
-      http.addHeader("Authorization", authHeader);
-
+      httpSetup();
       // Make a HTTP POST request
       if (WiFi.status() == WL_CONNECTED) {
 
         // variable parts of the JSON payload
         String idNumber = String(uid[0]) + ":"; // Use uid instead of data to avoid shadowing
 
-        String request = "Door"; // Renamed to postData to avoid shadowing
+        String request = ""; // Renamed to postData to avoid shadowing
 
         //building the idNumber
         for(int i = 1; i < UID_LENGTH; ++i){
@@ -251,29 +277,8 @@ void lock(){
         }
 
         // Create JSON payload of the request and the id of the card
-        String jsonPayload = "{\"form_id\":\"114\",\"api_test_data\":\"" + request + "\",\"api_test_card_id\":\"" + idNumber + "\"}";
-
-        // Debug: Print the payload
-        Serial.print("JSON Payload: ");
-        Serial.println(jsonPayload);
-
-        // Send HTTP POST request
-        int httpResponseCode = http.POST(jsonPayload);
-
-        // Check the returning code
-        if (httpResponseCode > 0) {
-            String response = http.getString();
-            Serial.println(httpResponseCode); // Print return code
-            Serial.println(response); // Print request response payload
-        } else {
-            Serial.print("Error on sending POST: ");
-            Serial.println(httpResponseCode);
-        }
-
-        // Free resources
-        http.end();
-        delay(2000);
-     
+        String jsonPayload = "{\"form_id\":\"1234\",\"api_test_data\":\"" + request + "\",\"api_test_card_id\":\"" + idNumber + "\"}";
+        deliverPackage(jsonPayload);
     } else {
     Serial.println("Error in WiFi connection");
     } 
@@ -291,6 +296,27 @@ void unlock(){
     delay(1000);
     digitalWrite(RELAY_ENABLE_PIN, HIGH); // Trigger relay to open
     delay(1000);
+    uint8_t success = scan_card();
+    if(success){
+      httpSetup();
+      digitalWrite(RELAY_ENABLE_PIN, LOW); //closes relay after a card has scanned again
+      String idNumber = String(uid[0]) + ":"; // Use uid instead of data to avoid shadowing
+
+      String request = ""; // Renamed to postData to avoid shadowing
+
+      //building the idNumber
+      for(int i = 1; i < UID_LENGTH; ++i){
+          if(i !=UID_LENGTH-1){
+          idNumber += String(uid[i]) + ":";
+          }else{
+          idNumber += String(uid[i]);
+          }
+        }
+      String jsonPayload = "{\"form_id\":\"1234\",\"api_test_data\":\"" + request + "\",\"api_test_card_id\":\"" + idNumber + "\"}";
+      deliverPackage(jsonPayload);
+      state = 0;
+    }
+
 }
 
 //manual overide to turn on the machine via key

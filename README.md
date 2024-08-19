@@ -1,1 +1,12 @@
-# Fuse33_SecurityCode
+#Features
+- NFC Setup and Reading
+    - scan_card(): Reads a NFC card UID and sends it to a webserver.
+- Wifi Connection
+    - Connects to Wifi using a ESP32 WROOM.
+- API Integration
+    - Sends the MAC and IP addresses of the ESP32 WROOM to a server using HTTP POST.
+- State Management
+    - Uses a state machine to handle different states
+        - lock() is the default state and checks for a card, if it receives a authorized signal from the server, unlocks the machine
+        - unlock() unlocks the machine
+- Manual Controls
