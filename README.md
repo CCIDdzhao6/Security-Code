@@ -14,4 +14,6 @@
         - disable() keeps the machine locked if the key connected to the disable pin (DISABLE_KEY_PIN) is moved to the closed state. 
         The access control is overiden until the key is moved to the open state. Disable is also turned off when the key connected the the overide pin is moved to the closed state
 - Manual Controls
-    - unlock(), overide(), and disable() all use a form of manual control to switch states. unlock() uses a button with built in delay to account for debounce. overide() and disable() use a key to change states.
+    - unlock(), overide(), and disable() all use a form of manual control to switch states.
+        - unlock() uses a button with built in delay to account for debounce.
+        - overide() and disable() use a key to change states.
