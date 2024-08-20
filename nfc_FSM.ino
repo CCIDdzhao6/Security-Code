@@ -137,7 +137,9 @@ void httpSetup(){
     http.addHeader("Authorization", authHeader);
 
 }
+/*
 
+*/
 void deliverPackage(String jsonPayload){
     // Debug: Print the payload
         Serial.print("JSON Payload: ");
@@ -171,8 +173,6 @@ void setup() {
 
   // Initialize NFC Object
   nfc.begin();
-
-  HTTPClient http;
   // Connect to Wi-Fi
   WiFi.begin(ssid, password);
   Serial.print("Connecting to WiFi ..");
@@ -198,37 +198,12 @@ void setup() {
     }
   }
 
-  // Specify content-type header
-  http.begin(serverName); // Specify the URL
-  http.addHeader("Content-Type", "application/json");
-
-  // Create Basic Authentication header
-  String authHeader = "Basic " + base64::encode(String(apiKey) + ":");
-  // Add Authorization header
-  http.addHeader("Authorization", authHeader);
+  httpSetup();
 
   // Create JSON payload to send ip and mac address to the server
   String jsonAddresses = "{\"form_id\":\"1234\",\"1234\":\"" + ip.toString() +"\",\"1234\":\"" + macString +"\"}";
 
-  // Debug: Print the payload
-  Serial.print("JSON Addresses: ");
-  Serial.println(jsonAddresses);
-
-  // Send HTTP POST request
-  int httpResponseCode = http.POST(jsonAddresses);
-
-  // Check the returning code
-  if (httpResponseCode > 0) {
-    String response = http.getString();
-    Serial.println(httpResponseCode); // Print return code
-    Serial.println(response); // Print request response payload
-  } else {
-    Serial.print("Error on sending POST: ");
-    Serial.println(httpResponseCode);
-  }
-
-  //free resources
-  http.end();
+  deliverPackage(jsonAddresses);
 
   
   uint32_t versiondata = nfc.getFirmwareVersion();
@@ -296,27 +271,22 @@ void unlock(){
     delay(1000);
     digitalWrite(RELAY_ENABLE_PIN, HIGH); // Trigger relay to open
     delay(1000);
-    uint8_t success = scan_card();
-    if(success){
-      httpSetup();
-      digitalWrite(RELAY_ENABLE_PIN, LOW); //closes relay after a card has scanned again
-      String idNumber = String(uid[0]) + ":"; // Use uid instead of data to avoid shadowing
-
-      String request = ""; // Renamed to postData to avoid shadowing
-
-      //building the idNumber
-      for(int i = 1; i < UID_LENGTH; ++i){
-          if(i !=UID_LENGTH-1){
-          idNumber += String(uid[i]) + ":";
-          }else{
-          idNumber += String(uid[i]);
-          }
-        }
-      String jsonPayload = "{\"form_id\":\"1234\",\"api_test_data\":\"" + request + "\",\"api_test_card_id\":\"" + idNumber + "\"}";
-      deliverPackage(jsonPayload);
-      state = 0;
+    manualLock = digitalRead(LOCK_BUTTON_PIN); //Check if the lock button is pressed to end current session
+    //debounce delay from the manual lock button being pressed
+    if(manualLock != lastManualLockState){
+      lastDebounceTime = millis();
     }
-
+    if((millis() - lastDebounceTime) > debounceDelay){
+      if(manualLock != currentManualLockState){
+        currentManualLockState = manualLock;
+        if(manualLock){
+          state = 0;
+        }
+      }
+    }
+    lastManualLockState = manualLock;
+    Serial.print("Manual Lock");
+    Serial.println(manualLock);
 }
 
 //manual overide to turn on the machine via key
@@ -330,6 +300,7 @@ void overide(){
     }else{
       state = 2;
     }
+    
 }
 
 //maunal api overide that disables the machine
@@ -351,27 +322,9 @@ void disable(){
 //main loop
 void loop() {   
     //Physical User IO pins
-    manualLock = digitalRead(LOCK_BUTTON_PIN); //Check if the lock button is pressed to end current session
     overide_command = digitalRead(OVERIDE_KEY_PIN); //Check if the overide key is inserted, and overides the system
     disable_command = digitalRead(DISABLE_KEY_PIN); //Check if the disable key is inserted, and disables the system
 
-    //debounce delay from the manual lock button being pressed
-    if(manualLock != lastManualLockState){
-      lastDebounceTime = millis();
-    }
-    if((millis() - lastDebounceTime) > debounceDelay){
-      if(manualLock != currentManualLockState){
-        currentManualLockState = manualLock;
-        if(manualLock){
-          state = 0;
-        }
-      }
-    }
-
-    //debugging to check if the manual lock, disable, and overide are being detected
-    lastManualLockState = manualLock;
-    Serial.print("Manual Lock");
-    Serial.println(manualLock);
     Serial.print("disable");
     Serial.println(disable_command);
     Serial.print("overide");
