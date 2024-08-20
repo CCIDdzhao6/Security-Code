@@ -1,4 +1,4 @@
-#Features
+# Features
 - NFC Setup and Reading
     - scan_card(): Reads a NFC card UID and sends it to a webserver.
 - Wifi Connection
